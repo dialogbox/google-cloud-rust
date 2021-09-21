@@ -12,20 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(bare_trait_objects)]
+pub mod google {
+    #[path = "google.api.rs"]
+    pub mod api;
 
-// This appears as a comment in each generated file. Add it once here
-// to save a bit of time and effort.
+    #[path = "google.protobuf.rs"]
+    pub mod protobuf;
 
-const _PROTOBUF_VERSION_CHECK: () = ::protobuf::VERSION_2_25_1;
-pub(crate) mod iam;
-pub(crate) mod rpc;
-pub(crate) mod r#type;
+    #[path = "google.r#type.rs"]
+    pub mod r#type;
 
-pub mod empty;
-pub mod api;
-pub mod bigtable;
-pub mod logging;
-pub mod longrunning;
-pub mod pubsub;
-pub mod spanner;
+    #[path = ""]
+    pub mod iam {
+        #[path = "google.iam.v1.rs"]
+        pub mod v1;
+    }
+    #[path = ""]
+    pub mod storage {
+        #[path = "google.storage.v1.rs"]
+        pub mod v1;
+        #[path = "google.storage.v2.rs"]
+        pub mod v2;
+    }
+}
