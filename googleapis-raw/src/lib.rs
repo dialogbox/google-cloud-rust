@@ -20,6 +20,12 @@ pub mod googleapis {
     pub mod bigtable {
         #[path = "google.bigtable.v2.rs"]
         pub mod v2;
+
+        #[path = ""]
+        pub mod admin {
+            #[path = "google.bigtable.admin.v2.rs"]
+            pub mod v2;
+        }
     }
 
     #[path = ""]
