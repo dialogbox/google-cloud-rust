@@ -1,17 +1,3 @@
-/// Encapsulates settings provided to GetIamPolicy.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GetPolicyOptions {
-    /// Optional. The policy format version to be returned.
-    ///
-    /// Valid values are 0, 1, and 3. Requests specifying an invalid value will be
-    /// rejected.
-    ///
-    /// Requests for policies with any conditional bindings must specify version 3.
-    /// Policies without any conditional bindings may specify any valid value or
-    /// leave the field unset.
-    #[prost(int32, tag = "1")]
-    pub requested_policy_version: i32,
-}
 /// Defines an Identity and Access Management (IAM) policy. It is used to
 /// specify access control policies for Cloud Platform resources.
 ///
@@ -231,6 +217,20 @@ pub mod audit_config_delta {
         /// Removal of an audit configuration.
         Remove = 2,
     }
+}
+/// Encapsulates settings provided to GetIamPolicy.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPolicyOptions {
+    /// Optional. The policy format version to be returned.
+    ///
+    /// Valid values are 0, 1, and 3. Requests specifying an invalid value will be
+    /// rejected.
+    ///
+    /// Requests for policies with any conditional bindings must specify version 3.
+    /// Policies without any conditional bindings may specify any valid value or
+    /// leave the field unset.
+    #[prost(int32, tag = "1")]
+    pub requested_policy_version: i32,
 }
 /// Request message for `SetIamPolicy` method.
 #[derive(Clone, PartialEq, ::prost::Message)]
