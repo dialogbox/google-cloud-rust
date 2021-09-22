@@ -29,11 +29,15 @@ edition = "2018"
 exclude = ["grpc"]
 
 [dependencies]
-tonic = { version = "0.5",  features = ["tls-roots", "tls", "compression"] }
+tonic = { version = "0.5", features = ["tls-roots", "tls", "compression"] }
 prost = "0.8"
 prost-types = "0.8"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+tokio-stream = "0.1"
 gcp_auth = "0.5"
 
 [build-dependencies]
 tonic-build = "0.5"
+
+[dev-dependencies]
+maplit = "1.0"

@@ -11,20 +11,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#[macro_use]
+extern crate maplit;
 
-use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio_stream::StreamExt;
 
-use gcp_auth::Token;
+use google_cloud_rust_raw::googleapis::bigtable::admin::v2::gc_rule::{self, Rule};
 use google_cloud_rust_raw::googleapis::bigtable::admin::v2::{ColumnFamily, GcRule, Table};
+use google_cloud_rust_raw::googleapis::bigtable::v2::bigtable_client::BigtableClient;
+use google_cloud_rust_raw::googleapis::bigtable::v2::{
+    mutate_rows_request, mutation, MutateRowsRequest, Mutation,
+};
+use google_cloud_rust_raw::utils::{AuthInterceptor, GcpService};
 use prost_types::Duration;
 
 use tonic::{
-    body::BoxBody,
-    client::GrpcService,
-    metadata::{errors::InvalidMetadataValue, AsciiMetadataValue, MetadataValue},
-    service::interceptor::InterceptedService,
-    service::Interceptor,
     transport::{Channel, ClientTlsConfig},
     Request, Response, Status,
 };
@@ -58,24 +60,10 @@ async fn connect(
     Ok(channel)
 }
 
-async fn auth_header() -> Result<AsciiMetadataValue, gcp_auth::Error> {
-    let scopes = &["https://www.googleapis.com/auth/cloud-platform"];
-    let authentication_manager = gcp_auth::init().await?;
-    let token = authentication_manager.get_token(scopes).await?;
-
-    let bearer_token = format!("Bearer {}", token.as_str());
-    Ok(MetadataValue::from_str(&bearer_token).unwrap())
-}
-
-pub type BigtableInstanceAdminClientType =
-    BigtableInstanceAdminClient<InterceptedService<Channel, AuthInterceptor>>;
-pub type BigtableTableAdminClientType =
-    BigtableTableAdminClient<InterceptedService<Channel, AuthInterceptor>>;
-
 /// Returns the cluster information
 ///
 async fn get_cluster(
-    client: &mut BigtableInstanceAdminClientType,
+    client: &mut BigtableInstanceAdminClient<GcpService>,
     cluster_id: &str,
 ) -> Result<Response<Cluster>, Status> {
     println!("Get cluster information");
@@ -88,7 +76,7 @@ async fn get_cluster(
 
 /// Lists all tables for a given cluster
 ///
-async fn list_tables(client: &mut BigtableTableAdminClientType, instance_id: &str) {
+async fn list_tables(client: &mut BigtableTableAdminClient<GcpService>, instance_id: &str) {
     println!("List all existing tables");
     let response = client
         .list_tables(Request::new(ListTablesRequest {
@@ -111,7 +99,7 @@ async fn list_tables(client: &mut BigtableTableAdminClientType, instance_id: &st
 /// Create a new table in the BigTable cluster
 ///
 async fn create_table(
-    client: &mut BigtableTableAdminClientType,
+    client: &mut BigtableTableAdminClient<GcpService>,
     instance_id: &str,
     table_name: &str,
     table: Table,
@@ -129,7 +117,7 @@ async fn create_table(
 
 /// Deletes a table asynchronously, returns a future
 async fn delete_table_async(
-    client: &mut BigtableTableAdminClientType,
+    client: &mut BigtableTableAdminClient<GcpService>,
     table_name: &str,
 ) -> Result<Response<()>, Status> {
     println!("Deleting the {} table", table_name);
@@ -138,19 +126,6 @@ async fn delete_table_async(
             name: table_name.into(),
         }))
         .await
-}
-
-pub struct AuthInterceptor {
-    header_value: AsciiMetadataValue,
-}
-
-impl Interceptor for AuthInterceptor {
-    fn call(&mut self, mut request: tonic::Request<()>) -> Result<tonic::Request<()>, Status> {
-        request
-            .metadata_mut()
-            .insert("authorization", self.header_value.clone());
-        Ok(request)
-    }
 }
 
 #[tokio::main]
@@ -176,111 +151,125 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let column_family_id = "cf1";
 
     // Create a Bigtable client.
-    let channel = connect(admin_domain_name, admin_endpoint).await?;
-    let header_value = auth_header().await?;
-    dbg!(&header_value);
+    let auth_interceptor = AuthInterceptor::auth().await?;
+    dbg!(&auth_interceptor);
 
-    let mut client =
-        BigtableInstanceAdminClient::with_interceptor(channel, AuthInterceptor { header_value });
-    dbg!(&client);
+    let admin_channel = connect(admin_domain_name, admin_endpoint).await?;
+
+    let mut client = BigtableInstanceAdminClient::with_interceptor(
+        admin_channel.clone(),
+        auth_interceptor.clone(),
+    );
 
     // display cluster information
     let cluster = get_cluster(&mut client, &cluster_id).await.unwrap();
     dbg!(&cluster);
 
-    //     // create admin client for tables
-    //     let mut admin_client =
-    //         BigtableTableAdminClient::with_interceptor(channel, move |mut req: Request<()>| {
-    //             req.metadata_mut()
-    //                 .insert("authorization", header_value.clone());
-    //             Ok(req)
-    //         });
+    // create admin client for tables
+    let mut admin_client =
+        BigtableTableAdminClient::with_interceptor(admin_channel, auth_interceptor.clone());
 
-    //     // display current tables
-    //     list_tables(&admin_client, &instance_id);
+    // display current tables
+    list_tables(&mut admin_client, &instance_id).await;
 
-    //     // create a new table with a custom column family / gc rule
-    //     let mut duration = Duration::new();
-    //     duration.set_seconds(60 * 60 * 24 * 5);
-    //     let mut gc_rule = GcRule::new();
-    //     gc_rule.set_max_num_versions(2);
-    //     gc_rule.set_max_age(duration);
-    //     let mut column_family = ColumnFamily::new();
-    //     column_family.set_gc_rule(gc_rule);
-    //     let mut hash_map = HashMap::new();
-    //     hash_map.insert(column_family_id.to_string(), column_family);
-    //     let mut table = Table::new();
-    //     table.set_column_families(hash_map);
-    //     match create_table(&admin_client, &instance_id, &table_name, table) {
-    //         Ok(table) => println!("  table {:?} created", table),
-    //         Err(error) => println!("  failed to created table: {}", error),
-    //     }
+    // create a new table with a custom column family / gc rule
+    let duration = Duration {
+        seconds: 60 * 60 * 24 * 5,
+        nanos: 0,
+    };
+    let gc_rule = GcRule {
+        rule: Some(Rule::Union(gc_rule::Union {
+            rules: vec![
+                GcRule {
+                    rule: Some(Rule::MaxNumVersions(2)),
+                },
+                GcRule {
+                    rule: Some(Rule::MaxAge(duration)),
+                },
+            ],
+        })),
+    };
+    let column_family = ColumnFamily {
+        gc_rule: Some(gc_rule),
+    };
 
-    //     // insert entries into new table
-    //     println!("Insert entries into table");
+    let hash_map = hashmap! { column_family_id.to_string() => column_family };
+    let table = Table {
+        column_families: hash_map,
+        ..Table::default()
+    };
+    match create_table(&mut admin_client, &instance_id, &table_name, table).await {
+        Ok(table) => println!("  table {:?} created", table),
+        Err(error) => println!("  failed to created table: {}", error),
+    }
 
-    //     let greetings = vec!["Hello World!", "Hello Cloud!", "Hello Rust!"];
-    //     let mut mutation_requests = Vec::new();
-    //     let column = "greeting";
-    //     for (i, greeting) in greetings.iter().enumerate() {
-    //         let row_key = format!("greeting{}", i);
+    // insert entries into new table
+    println!("Insert entries into table");
 
-    //         let mut set_cell = Mutation_SetCell::new();
-    //         set_cell.set_column_qualifier(column.to_string().into_bytes());
-    //         set_cell.set_timestamp_micros(-1);
-    //         set_cell.set_value(greeting.to_string().into_bytes());
-    //         set_cell.set_family_name(column_family_id.to_string());
+    let greetings = vec!["Hello World!", "Hello Cloud!", "Hello Rust!"];
+    let mut mutation_requests = Vec::new();
+    let column = "greeting";
+    for (i, greeting) in greetings.iter().enumerate() {
+        let row_key = format!("greeting{}", i);
 
-    //         let mut mutation = Mutation::new();
-    //         mutation.set_set_cell(set_cell);
+        let set_cell = mutation::SetCell {
+            column_qualifier: column.to_string().into_bytes(),
+            timestamp_micros: -1,
+            value: greeting.to_string().into_bytes(),
+            family_name: column_family_id.to_string(),
+        };
 
-    //         let mut request = MutateRowsRequest_Entry::new();
-    //         request.set_row_key(row_key.into_bytes());
-    //         request.set_mutations(RepeatedField::from_vec(vec![mutation]));
+        let mutation = Mutation {
+            mutation: Some(mutation::Mutation::SetCell(set_cell)),
+        };
 
-    //         mutation_requests.push(request);
-    //     }
+        let entry = mutate_rows_request::Entry {
+            row_key: row_key.into_bytes(),
+            mutations: vec![mutation],
+        };
 
-    //     let channel = connect(endpoint);
-    //     let _client = BigtableClient::new(channel.clone());
-    //     let mut request = MutateRowsRequest::new();
-    //     request.set_table_name(table_name.to_string());
-    //     request.set_entries(RepeatedField::from_vec(mutation_requests));
+        mutation_requests.push(entry);
+    }
 
-    //     /*
+    let channel = connect(domain_name, endpoint).await?;
+    let mut client = BigtableClient::with_interceptor(channel, auth_interceptor.clone());
 
-    //     TODO:: fix this.admin_client
-    //     `.collect()` needs a type.
-    //     // apply changes and check responses
-    //     let response = client
-    //         .mutate_rows(&request).unwrap()
-    //         .collect()
-    //         .into_future()
-    //         .wait().unwrap();
-    //     for response in response.iter() {
-    //         for entry in response.get_entries().iter() {
-    //             let status = entry.get_status();
-    //             println!(
-    //                 "  entry index: {}, status: {} - {}",
-    //                 entry.get_index(),
-    //                 status.code,
-    //                 status.message
-    //             );
-    //         }
-    //     }
-    //     */
-    //     // display all tables, should include new table
-    //     list_tables(&admin_client, &instance_id);
+    let request = MutateRowsRequest {
+        table_name: table_name.to_string(),
+        entries: mutation_requests,
+        ..MutateRowsRequest::default()
+    };
 
-    //     // delete the table
-    //     delete_table_async(&admin_client, &table_name)
-    //         .unwrap()
-    //         .await
-    //         .map_err(|e| dbg!(e))
-    //         .expect("Failure");
+    let response = client
+        .mutate_rows(request)
+        .await
+        .unwrap()
+        .into_inner()
+        .collect::<Vec<_>>()
+        .await;
 
-    //     // list of tables should not have deleted table
-    //     list_tables(&admin_client, &instance_id);
+    for response in response.iter() {
+        for entry in &response.as_ref().unwrap().entries {
+            let status = entry.status.as_ref().unwrap();
+            println!(
+                "  entry index: {}, status: {} - {}",
+                entry.index, status.code, status.message
+            );
+        }
+    }
+
+    // display all tables, should include new table
+    list_tables(&mut admin_client, &instance_id).await;
+
+    // delete the table
+    delete_table_async(&mut admin_client, &table_name)
+        .await
+        .unwrap();
+    // .map_err(|e| dbg!(e))
+    // .expect("Failure");
+
+    // list of tables should not have deleted table
+    list_tables(&mut admin_client, &instance_id).await;
 
     Ok(())
 }
