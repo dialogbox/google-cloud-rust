@@ -30,6 +30,7 @@ use google_cloud_rust_raw::googleapis::bigtable::v2::{
     mutate_rows_request, mutation, MutateRowsRequest, Mutation,
 };
 use google_cloud_rust_raw::utils::*;
+use std::env;
 
 /// Returns the cluster information
 ///
@@ -102,7 +103,7 @@ async fn delete_table_async(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // BigTable project id
-    let project_id = String::from("mozilla-rust-sdk-dev");
+    let project_id = env::var("PROJECT_ID").unwrap_or("mozilla-rust-sdk-dev".to_string());
     // The BigTable instance id
     let instance_id = format!("projects/{}/instances/mozilla-rust-sdk", project_id);
     // The cluster id
@@ -112,10 +113,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     // common table endpoint
     let endpoint = "https://bigtable.googleapis.com";
-    let domain_name = "bigtable.googleapis.com";
     // Google Cloud configuration.
     let admin_endpoint = "https://bigtableadmin.googleapis.com";
-    let admin_domain_name = "bigtableadmin.googleapis.com";
     // The table name
     let table_name = format!(
         "projects/{}/instances/mozilla-rust-sdk/tables/hello-world",
@@ -124,11 +123,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let column_family_id = "cf1";
 
-    // Create a Bigtable client.
+    // Create an auth interceptor
     let auth_interceptor = AuthInterceptor::with_adc().await?;
-    dbg!(&auth_interceptor);
 
-    let admin_channel = connect(admin_domain_name, admin_endpoint).await?;
+    // Create a Bigtable admin client.
+    let admin_channel = connect(admin_endpoint).await?;
 
     let mut client = BigtableInstanceAdminClient::with_interceptor(
         admin_channel.clone(),
@@ -205,7 +204,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         mutation_requests.push(entry);
     }
 
-    let channel = connect(domain_name, endpoint).await?;
+    let channel = connect(endpoint).await?;
     let mut client = BigtableClient::with_interceptor(channel, auth_interceptor.clone());
 
     let request = MutateRowsRequest {

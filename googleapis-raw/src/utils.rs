@@ -4,7 +4,7 @@ use gcp_auth::Token;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::{AsciiMetadataValue, MetadataValue};
 use tonic::service::Interceptor;
-use tonic::transport::{Channel, ClientTlsConfig};
+use tonic::transport::Channel;
 use tonic::Status;
 
 #[derive(Clone, Debug)]
@@ -42,15 +42,8 @@ pub type GcpService = InterceptedService<Channel, AuthInterceptor>;
 pub type GcpAuthError = gcp_auth::Error;
 
 /// Create a new channel used for the different types of clients
-pub async fn connect(
-    domain_name: &'static str,
-    endpoint: &'static str,
-) -> Result<Channel, tonic::transport::Error> {
-    let tls_config = ClientTlsConfig::new().domain_name(domain_name);
-    let channel = Channel::from_static(endpoint)
-        .tls_config(tls_config)?
-        .connect()
-        .await?;
+pub async fn connect(endpoint: &'static str) -> Result<Channel, tonic::transport::Error> {
+    let channel = Channel::from_static(endpoint).connect().await?;
 
     Ok(channel)
 }
