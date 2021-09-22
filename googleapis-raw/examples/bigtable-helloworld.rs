@@ -102,12 +102,13 @@ async fn delete_table_async(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // BigTable project id
-    let _project_id = String::from("mozilla-rust-sdk-dev");
+    let project_id = String::from("mozilla-rust-sdk-dev");
     // The BigTable instance id
-    let instance_id = String::from("projects/mozilla-rust-sdk-dev/instances/mozilla-rust-sdk");
+    let instance_id = format!("projects/{}/instances/mozilla-rust-sdk", project_id);
     // The cluster id
-    let cluster_id = String::from(
-        "projects/mozilla-rust-sdk-dev/instances/mozilla-rust-sdk/clusters/mozilla-rust-sdk-c1",
+    let cluster_id = format!(
+        "projects/{}/instances/mozilla-rust-sdk/clusters/mozilla-rust-sdk-c1",
+        project_id
     );
     // common table endpoint
     let endpoint = "https://bigtable.googleapis.com";
@@ -116,8 +117,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let admin_endpoint = "https://bigtableadmin.googleapis.com";
     let admin_domain_name = "bigtableadmin.googleapis.com";
     // The table name
-    let table_name =
-        String::from("projects/mozilla-rust-sdk-dev/instances/mozilla-rust-sdk/tables/hello-world");
+    let table_name = format!(
+        "projects/{}/instances/mozilla-rust-sdk/tables/hello-world",
+        project_id
+    );
 
     let column_family_id = "cf1";
 
