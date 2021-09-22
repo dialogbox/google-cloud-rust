@@ -1,11 +1,11 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use gcp_auth::Token;
-use tonic::{
-    codegen::InterceptedService,
-    metadata::{AsciiMetadataValue, MetadataValue},
-    service::Interceptor,
-    transport::Channel,
-    Status,
-};
+use tonic::codegen::InterceptedService;
+use tonic::metadata::{AsciiMetadataValue, MetadataValue};
+use tonic::service::Interceptor;
+use tonic::transport::{Channel, ClientTlsConfig};
+use tonic::Status;
 
 #[derive(Clone, Debug)]
 pub struct AuthInterceptor {
@@ -13,7 +13,7 @@ pub struct AuthInterceptor {
 }
 
 impl AuthInterceptor {
-    pub async fn auth() -> Result<AuthInterceptor, gcp_auth::Error> {
+    pub async fn with_adc() -> Result<AuthInterceptor, GcpAuthError> {
         let scopes = &["https://www.googleapis.com/auth/cloud-platform"];
         let authentication_manager = gcp_auth::init().await?;
         let token = authentication_manager.get_token(scopes).await?;
@@ -39,3 +39,27 @@ impl Interceptor for AuthInterceptor {
 }
 
 pub type GcpService = InterceptedService<Channel, AuthInterceptor>;
+pub type GcpAuthError = gcp_auth::Error;
+
+/// Create a new channel used for the different types of clients
+pub async fn connect(
+    domain_name: &'static str,
+    endpoint: &'static str,
+) -> Result<Channel, tonic::transport::Error> {
+    let tls_config = ClientTlsConfig::new().domain_name(domain_name);
+    let channel = Channel::from_static(endpoint)
+        .tls_config(tls_config)?
+        .connect()
+        .await?;
+
+    Ok(channel)
+}
+
+#[allow(dead_code)]
+fn timestamp() -> u128 {
+    let start = SystemTime::now();
+    let time = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Failed to fetch timestamp");
+    time.as_micros()
+}

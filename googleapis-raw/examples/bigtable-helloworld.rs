@@ -14,51 +14,22 @@
 #[macro_use]
 extern crate maplit;
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use prost_types::Duration;
 use tokio_stream::StreamExt;
+use tonic::{Request, Response, Status};
 
+use google_cloud_rust_raw::googleapis::bigtable::admin::v2::bigtable_instance_admin_client::BigtableInstanceAdminClient;
+use google_cloud_rust_raw::googleapis::bigtable::admin::v2::bigtable_table_admin_client::BigtableTableAdminClient;
 use google_cloud_rust_raw::googleapis::bigtable::admin::v2::gc_rule::{self, Rule};
-use google_cloud_rust_raw::googleapis::bigtable::admin::v2::{ColumnFamily, GcRule, Table};
+use google_cloud_rust_raw::googleapis::bigtable::admin::v2::{
+    Cluster, ColumnFamily, CreateTableRequest, DeleteTableRequest, GcRule, GetClusterRequest,
+    ListTablesRequest, Table,
+};
 use google_cloud_rust_raw::googleapis::bigtable::v2::bigtable_client::BigtableClient;
 use google_cloud_rust_raw::googleapis::bigtable::v2::{
     mutate_rows_request, mutation, MutateRowsRequest, Mutation,
 };
-use google_cloud_rust_raw::utils::{AuthInterceptor, GcpService};
-use prost_types::Duration;
-
-use tonic::{
-    transport::{Channel, ClientTlsConfig},
-    Request, Response, Status,
-};
-
-use google_cloud_rust_raw::googleapis::bigtable::admin::v2::{
-    bigtable_instance_admin_client::BigtableInstanceAdminClient,
-    bigtable_table_admin_client::BigtableTableAdminClient, Cluster, CreateTableRequest,
-    DeleteTableRequest, GetClusterRequest, ListTablesRequest,
-};
-
-#[allow(dead_code)]
-fn timestamp() -> u128 {
-    let start = SystemTime::now();
-    let time = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Failed to fetch timestamp");
-    time.as_micros()
-}
-
-/// Create a new channel used for the different types of clients
-async fn connect(
-    domain_name: &'static str,
-    endpoint: &'static str,
-) -> Result<Channel, tonic::transport::Error> {
-    let tls_config = ClientTlsConfig::new().domain_name(domain_name);
-    let channel = Channel::from_static(endpoint)
-        .tls_config(tls_config)?
-        .connect()
-        .await?;
-
-    Ok(channel)
-}
+use google_cloud_rust_raw::utils::*;
 
 /// Returns the cluster information
 ///
@@ -151,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let column_family_id = "cf1";
 
     // Create a Bigtable client.
-    let auth_interceptor = AuthInterceptor::auth().await?;
+    let auth_interceptor = AuthInterceptor::with_adc().await?;
     dbg!(&auth_interceptor);
 
     let admin_channel = connect(admin_domain_name, admin_endpoint).await?;
