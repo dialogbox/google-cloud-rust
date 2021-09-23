@@ -2,7 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use gcp_auth::Token;
 use tonic::codegen::InterceptedService;
-use tonic::metadata::{AsciiMetadataValue, MetadataValue};
+use tonic::metadata::AsciiMetadataValue;
 use tonic::service::Interceptor;
 use tonic::transport::Channel;
 use tonic::Status;
@@ -24,7 +24,7 @@ impl AuthInterceptor {
     pub fn with_token(token: &Token) -> AuthInterceptor {
         let bearer_token = format!("Bearer {}", token.as_str());
         AuthInterceptor {
-            header_value: MetadataValue::from_str(&bearer_token).unwrap(),
+            header_value: bearer_token.parse().unwrap(),
         }
     }
 }
